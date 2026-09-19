@@ -1,0 +1,12 @@
+{
+  "id": "s21-frame",
+  "vertices": [
+    { "id": "ingress", "type": "identity" },
+    { "id": "frame", "type": "chunk.frame", "config": { "size": 128 } },
+    { "id": "collect", "type": "chunk.collect" }
+  ],
+  "edges": [
+    { "source": "ingress", "target": "frame", "capacity": 32, "delivery": "required", "overflow": "block" },
+    { "source": "frame", "target": "collect", "capacity": 64, "delivery": "required", "overflow": "block" }
+  ]
+}

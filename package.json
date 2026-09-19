@@ -1,0 +1,35 @@
+{
+  "name": "conveyor-graph-simulator",
+  "version": "0.0.1",
+  "description": "Virtual-time / synthetic harness and scenario catalog for conveyor-graph",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./reference": {
+      "types": "./dist/reference/index.d.ts",
+      "import": "./dist/reference/index.js"
+    }
+  },
+  "files": ["dist", "src", "IMPLEMENTATION-PLAN.md", "SCENARIO-CATALOG.md", "SPEC-DECISIONS.md"],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test --import ./test/register.mjs test/*.test.ts",
+    "test:reference": "node --experimental-strip-types --test --import ./test/register.mjs test/reference/*.test.ts"
+  },
+  "license": "ISC",
+  "peerDependencies": {
+    "conveyor-graph": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "conveyor-graph": "file:../conveyor-graph",
+    "typescript": "^5.8.2"
+  }
+}

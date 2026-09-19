@@ -1,0 +1,21 @@
+{
+  "id": "s22-order",
+  "vertices": [
+    { "id": "ingress", "type": "identity" },
+    { "id": "frame", "type": "chunk.frame", "config": { "size": 128 } },
+    {
+      "id": "work",
+      "type": "chunk.xor",
+      "options": { "parallel": 4 },
+      "config": { "mask": 90, "invertMs": 4 }
+    },
+    { "id": "order", "type": "chunk.order" },
+    { "id": "collect", "type": "chunk.collect" }
+  ],
+  "edges": [
+    { "source": "ingress", "target": "frame", "capacity": 32, "delivery": "required", "overflow": "block" },
+    { "source": "frame", "target": "work", "capacity": 64, "delivery": "required", "overflow": "block" },
+    { "source": "work", "target": "order", "capacity": 64, "delivery": "required", "overflow": "block" },
+    { "source": "order", "target": "collect", "capacity": 64, "delivery": "required", "overflow": "block" }
+  ]
+}

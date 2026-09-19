@@ -1,0 +1,21 @@
+{
+  "id": "s24-error",
+  "vertices": [
+    { "id": "ingress", "type": "identity" },
+    { "id": "frame", "type": "chunk.frame", "config": { "size": 128 } },
+    {
+      "id": "work",
+      "type": "chunk.xor",
+      "options": { "parallel": 2 },
+      "config": { "failOnSequence": 1 }
+    },
+    { "id": "order", "type": "chunk.order" },
+    { "id": "collect", "type": "chunk.collect" }
+  ],
+  "edges": [
+    { "source": "ingress", "target": "frame", "capacity": 32, "delivery": "required", "overflow": "block" },
+    { "source": "frame", "target": "work", "capacity": 64, "delivery": "required", "overflow": "block" },
+    { "source": "work", "target": "order", "capacity": 64, "delivery": "required", "overflow": "block" },
+    { "source": "order", "target": "collect", "capacity": 64, "delivery": "required", "overflow": "block" }
+  ]
+}
