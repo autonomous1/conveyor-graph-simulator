@@ -51,8 +51,17 @@ export function linearRequired(opts: LinearOpts = {}): LinearWorld {
     hop,
     sink,
     metrics: new MetricCollector(graph),
-    requiredEdgeId: "hop-target",
+    requiredEdgeId: edgeIdBetween(graph, "hop", "target") ?? "hop-target",
   };
+}
+
+function edgeIdBetween(graph: ConveyorGraph, source: string, target: string): string | undefined {
+  for (const [id, e] of Object.entries(graph.edge)) {
+    const src = (e as { sourceId?: string; source?: string }).sourceId ?? (e as { source?: string }).source;
+    const dst = (e as { targetId?: string; target?: string }).targetId ?? (e as { target?: string }).target;
+    if (src === source && dst === target) return id;
+  }
+  return undefined;
 }
 
 export interface FanoutWorld {

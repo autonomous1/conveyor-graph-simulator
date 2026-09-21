@@ -42,23 +42,52 @@ function comparePending(a: Pending, b: Pending): number {
   return 0;
 }
 
+export interface NetworkRng {
+  drop: SplitMix64;
+  dup: SplitMix64;
+  reorder: SplitMix64;
+  jitter: SplitMix64;
+}
+
 export class NetworkScheduler {
   readonly peers = new Set<string>();
   readonly bodies = new Map<string, unknown>();
+  #refs = new Map<string, number>();
   #links = new Map<string, LinkProfile>();
   #partitions = new Map<string, { fromTick: bigint; toTick: bigint }>();
   #pending: Pending[] = [];
   #trace: NetDecision[] = [];
   #traceCap = 1024;
-  #rng: SplitMix64 | null = null;
+  #rng: NetworkRng | null = null;
 
+  /** Single stream used for every network decision (tests / simple callers). */
   useRng(rng: SplitMix64): void {
+    this.#rng = { drop: rng, dup: rng, reorder: rng, jitter: rng };
+  }
+
+  /** Independent streams so enabling drop does not retarget jitter/reorder. */
+  useNetworkRng(rng: NetworkRng): void {
     this.#rng = rng;
   }
 
   #record(decision: NetDecision): void {
     this.#trace.push(decision);
     if (this.#trace.length > this.#traceCap) this.#trace.splice(0, this.#trace.length - this.#traceCap);
+  }
+
+  #retain(hash: string, payload: unknown): void {
+    this.bodies.set(hash, payload);
+    this.#refs.set(hash, (this.#refs.get(hash) ?? 0) + 1);
+  }
+
+  #release(hash: string): void {
+    const n = (this.#refs.get(hash) ?? 1) - 1;
+    if (n <= 0) {
+      this.bodies.delete(hash);
+      this.#refs.delete(hash);
+    } else {
+      this.#refs.set(hash, n);
+    }
   }
 
   addPeer(id: string): this {
@@ -73,13 +102,15 @@ export class NetworkScheduler {
   }
 
   partition(from: string, to: string, channel: string, fromTick: bigint, toTick: bigint): this {
+    if (toTick < fromTick) {
+      throw new RangeError(`partition toTick (${toTick}) < fromTick (${fromTick})`);
+    }
     this.#partitions.set(linkId({ from, to, channel }), { fromTick, toTick });
     return this;
   }
 
   send(spec: NetSendSpec): NetDecision {
     const payloadHash = sha256CanonicalV1(spec.payload);
-    this.bodies.set(payloadHash, spec.payload);
     const bytes = canonicalSerialize(spec.payload).length;
     const key = linkId(spec);
     const profile = this.#links.get(key);
@@ -110,7 +141,7 @@ export class NetworkScheduler {
     const rng = this.#rng;
     if (!rng) throw new Error("NetworkScheduler.useRng required before send");
 
-    if (hitsThreshold(rng, profile.dropPerU64)) {
+    if (hitsThreshold(rng.drop, profile.dropPerU64)) {
       const decision: NetDecision = { message: base, outcome: "drop" };
       this.#record(decision);
       return decision;
@@ -126,15 +157,17 @@ export class NetworkScheduler {
     const dueTick = resolveDue(spec.sendTick, profile, rng);
     const msg: Pending = { ...base, dueTick: dueTick.toString(10) };
     this.#pending.push(msg);
+    this.#retain(payloadHash, spec.payload);
     const decision: NetDecision = {
       message: msg,
       outcome: dueTick === spec.sendTick ? "deliver" : "delay",
     };
     this.#record(decision);
 
-    if (hitsThreshold(rng, profile.dupPerU64)) {
+    if (hitsThreshold(rng.dup, profile.dupPerU64)) {
       const dup: Pending = { ...msg, id: `${spec.id}#2` };
       this.#pending.push(dup);
+      this.#retain(payloadHash, spec.payload);
       this.#record({ message: dup, outcome: "duplicate" });
     }
     return decision;
@@ -144,8 +177,12 @@ export class NetworkScheduler {
     const out: NetAdmitPayload[] = [];
     const rest: Pending[] = [];
     for (const item of this.#pending) {
-      if (BigInt(item.dueTick) <= due) out.push({ ...item, outcome: "deliver" });
-      else rest.push(item);
+      if (BigInt(item.dueTick) <= due) {
+        out.push({ ...item, outcome: "deliver" });
+        this.#release(item.payloadHash);
+      } else {
+        rest.push(item);
+      }
     }
     this.#pending = rest;
     out.sort(comparePending);

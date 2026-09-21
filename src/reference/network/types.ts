@@ -8,6 +8,13 @@ export type NetOutcome =
   | "reject"
   | "partition";
 
+/**
+ * Per-link fault profile.
+ *
+ * `dropPerU64`, `dupPerU64`, and `reorderPerU64` are raw thresholds against
+ * `SplitMix64.nextU64()`, not "1 in N". Probability is `threshold / 2^64`:
+ * `1n << 63n` ≈ 50%, `1n << 62n` ≈ 25%. Use `perU64FromProbability`.
+ */
 export interface LinkProfile {
   latencyTicks?: number;
   jitterTicks?: number;

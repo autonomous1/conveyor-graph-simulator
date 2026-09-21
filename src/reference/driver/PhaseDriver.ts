@@ -5,7 +5,8 @@ export type GroupFn = () => void | Promise<void>;
 
 /**
  * Ordered group runner. Missing groups are no-ops.
- * M0: no graphs, no whenIdle, no timers. Hash/advance stay caller-owned.
+ * `ReferenceRuntime.runTick` inlines this sequence with quiesce / commit hooks
+ * between groups; do not treat this class as the live phase machine.
  */
 export class PhaseDriver {
   private readonly groups: Partial<Record<GroupName, GroupFn>>;

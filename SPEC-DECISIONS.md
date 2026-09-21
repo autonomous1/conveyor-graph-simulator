@@ -214,3 +214,15 @@ Trace profile; sweep >3 axes; topology rebuild; Immer; replay migrate; state-dif
 7. HANDLE_BRAND robustness — compose only.
 
 Early milestones may register raw `ConveyorGraph` vertices.
+
+---
+
+## D16. Review follow-ups (bodies, streams, admit gate)
+
+- `NetworkScheduler.bodies` is refcounted. Retain only when a message is queued (including `dupPerU64` copies). `tick` releases after the last pending reference is delivered. Drop / reject / partition never store a body.
+- `*PerU64` fields are raw `nextU64()` thresholds (`1n << 63n` = 50%). Not “once per N”.
+- Network decisions use labeled streams `network.drop`, `network.dup`, `network.reorder`, `network.jitter`. A single `useRng` still fans one stream to all four for tests.
+- Admit gates sim: `ctx.fail` during an admit send stops further admit injects and that event is not sent to sim. The tick still aborts via `TickAbortedError`.
+- Handler throw in the default wrapper is tick abort, not `graph/error` routing.
+- Envelope hash includes the full RNG snapshot. Same committed state with different draw counts is a different envelope.
+- `StateStore.read` aliases live committed objects. Callers that cache a read across `apply` see later writes.

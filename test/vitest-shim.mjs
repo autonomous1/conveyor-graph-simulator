@@ -22,6 +22,13 @@ export const expect = (actual) => ({
   toBeGreaterThanOrEqual(expected) {
     assert.ok(actual >= expected, `${actual} >= ${expected}`);
   },
+  toBeCloseTo(expected, digits = 2) {
+    const tol = 10 ** -digits / 2;
+    assert.ok(
+      Math.abs(Number(actual) - Number(expected)) < tol,
+      `${actual} close to ${expected} (digits=${digits})`,
+    );
+  },
   toHaveLength(expected) {
     assert.equal(actual.length, expected);
   },

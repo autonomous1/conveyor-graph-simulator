@@ -1,6 +1,5 @@
 import { ConveyorGraph, GraphAgent, type StreamAgent, type VertexHandler } from "conveyor-graph";
 import { TickClock } from "../clock/TickClock.js";
-import { PhaseDriver } from "../driver/PhaseDriver.js";
 import { createRootRng, type RootRng } from "../rng/streams.js";
 import { sha256CanonicalV1 } from "../canonical/hash.js";
 import { StateStore } from "../authority/StateStore.js";
@@ -186,7 +185,12 @@ export class ReferenceRuntime {
     this.#observeAgent = new GraphAgent("observe-driver", {}, {}, this.observe);
     this.#admitAgent = new GraphAgent("admit-driver", {}, {}, this.admit);
     this.#simAgent = new GraphAgent("sim-driver", {}, {}, this.sim);
-    this.network.useRng(this.rng.stream("network"));
+    this.network.useNetworkRng({
+      drop: this.rng.stream("network.drop"),
+      dup: this.rng.stream("network.dup"),
+      reorder: this.rng.stream("network.reorder"),
+      jitter: this.rng.stream("network.jitter"),
+    });
     this.#started = true;
     const hash0 = this.hashEnvelope("0");
     this.hashes.push(hash0);
@@ -233,15 +237,18 @@ export class ReferenceRuntime {
 
     const events = this.#collectAdmit(this.#due);
     this.#activeGroup = "admit";
+    const admitted: AdmitEvent[] = [];
     for (const event of events) {
       await this.#admitAgent.send(this.admitIngress, event.id, event);
+      if (this.#failure) break;
+      admitted.push(event);
     }
     const occupancyAdmit = this.admit.occupancy();
     await this.#quiesce(this.admit, "admit");
     this.#throwIfFailed();
 
     this.#activeGroup = "sim";
-    for (const event of events) {
+    for (const event of admitted) {
       await this.#simAgent.send(this.simIngress, event.id, event.payload);
     }
     const occupancySim = this.sim.occupancy();
@@ -301,6 +308,7 @@ export class ReferenceRuntime {
     return digest;
   }
 
+  /** Envelope identity includes RNG cursors: same world, different draw counts, different hash. */
   hashEnvelope(tick: string): string {
     return sha256CanonicalV1({
       tick,
@@ -353,16 +361,23 @@ export class ReferenceRuntime {
   async #quiesce(graph: ConveyorGraph, group: string): Promise<void> {
     if (!graph.hasWork()) return;
     const idle = graph.whenIdle();
-    let steps = 0;
-    while (graph.hasWork() && steps < MAX_STEPS_PER_PHASE) {
-      await Promise.resolve();
-      steps++;
-    }
-    if (graph.hasWork()) throw new PhaseDidNotQuiesce(group, steps);
-    await idle;
+    const fused = new Promise<never>((_, reject) => {
+      let steps = 0;
+      const hop = () => {
+        if (!graph.hasWork()) return;
+        if (++steps >= MAX_STEPS_PER_PHASE) {
+          reject(new PhaseDidNotQuiesce(group, steps));
+          return;
+        }
+        queueMicrotask(hop);
+      };
+      queueMicrotask(hop);
+    });
+    await Promise.race([idle, fused]);
   }
 }
 
+/** Handler throw aborts the tick via `ctx.fail`; it does not route to `graph/error`. */
 function wrap(ctx: RuntimeContext, vertexId: string, handler: VertexHandler): VertexHandler {
   return async (agent) => {
     try {

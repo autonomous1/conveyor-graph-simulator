@@ -40,7 +40,14 @@ export class StateStore {
     return structuredClone(this.#committed);
   }
 
-  /** Read committed state. Allowed outside and during commit. */
+  /**
+   * Read committed state. Allowed outside and during commit.
+   *
+   * Returns the live node inside `#committed`, not a clone. Holding the
+   * result across `apply` / `commit` aliases later writes (e.g. `read(["a"])`
+   * then `apply({ path: ["a","b"], ... })` mutates the held object).
+   * Use {@link snapshot} or `structuredClone(read(path))` for a stable view.
+   */
   read(path: string[]): unknown {
     let cursor: unknown = this.#committed;
     for (const key of path) {

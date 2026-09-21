@@ -2,16 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   NetworkScheduler,
   SplitMix64,
-  encodeArtifact,
   decodeArtifact,
   recordRun,
   run,
   defineScenario,
   deepFreeze,
   createReferenceRuntime,
-  perU64FromProbability,
-  probabilityFromPerU64,
-} from "../../src/reference/index.js";
+} from "../src/reference/index.js";
+import { perU64FromProbability, probabilityFromPerU64 } from "../src/reference/network/FaultEngine.js";
 
 describe("review fixes", () => {
   it("does not deliver tick-10 traffic at tick 9", () => {
@@ -106,8 +104,8 @@ describe("review fixes", () => {
   });
 
   it("maps perU64 thresholds as raw nextU64 cuts", () => {
-    expect(probabilityFromPerU64(1n << 63n)).toBeCloseTo(0.5, 10);
-    expect(probabilityFromPerU64(1n << 62n)).toBeCloseTo(0.25, 10);
+    expect(probabilityFromPerU64(1n << 63n)).toBe(0.5);
+    expect(probabilityFromPerU64(1n << 62n)).toBe(0.25);
     expect(perU64FromProbability(0)).toBe(0n);
     expect(perU64FromProbability(1)).toBe(0xffff_ffff_ffff_ffffn);
   });

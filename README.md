@@ -49,9 +49,19 @@ send(spec) → drop | delay | deliver | partition | reject
 tick(due)  → messages whose dueTick ≤ due
 ```
 
-Profiles (`LinkProfile`) can set latency, jitter, drop, duplicate, reorder, and capacity. Call `useRng(new SplitMix64(seed))` before `send`. Payload hashing uses the reference canonical form; **do not** pass raw JS `bigint` graphs as payload—wrap ticks as strings if the payload is application JSON.
+Profiles (`LinkProfile`) can set latency, jitter, drop, duplicate, reorder, and capacity. Call `useRng(new SplitMix64(seed))` before `send`, or `useNetworkRng` with separate drop/dup/reorder/jitter streams. Payload hashing uses the reference canonical form; **do not** pass raw JS `bigint` graphs as payload—wrap ticks as strings if the payload is application JSON.
 
-Named streams should stay separate: agent RNG vs network RNG. Changing drop probability must not change a world step that used a different stream.
+`dropPerU64` / `dupPerU64` / `reorderPerU64` are raw thresholds against `nextU64()`, not “1 in N”. Probability is `threshold / 2^64` (`1n << 63n` is 50%). Use `perU64FromProbability`.
+
+Named streams stay separate: `sim`, `resource`, `overflow`, and `network.drop` / `network.dup` / `network.reorder` / `network.jitter`. Enabling drop does not consume jitter or reorder draws. The envelope hash includes the full RNG snapshot, so two runs that reach the same store state with different draw counts hash differently.
+
+`NetworkScheduler.bodies` holds payloads only while a pending (or duplicate) message still references them; `tick` releases the body after the last delivery.
+
+`StateStore.read` returns the live committed node. Do not cache it across `apply`.
+
+Handler throws in the default vertex wrapper abort the tick (`TickAbortedError`). They do not route to `graph/error`.
+
+Admit validates first and gates sim: an event whose admit step records `ctx.fail` is not sent into sim.
 
 ## Scripts
 
