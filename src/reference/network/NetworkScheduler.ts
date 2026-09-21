@@ -90,6 +90,18 @@ export class NetworkScheduler {
     }
   }
 
+  /**
+   * Drop one retain on a payload body. The engine calls this after it has
+   * consumed an admitted message (`payload.payloadHash`). Safe if the hash
+   * is already gone. Duplicates share a hash: the body stays until the last
+   * pending reference is released.
+   */
+  release(hash: string): void {
+    if (!hash) return;
+    if (!this.bodies.has(hash) && !this.#refs.has(hash)) return;
+    this.#release(hash);
+  }
+
   addPeer(id: string): this {
     this.peers.add(id);
     return this;
@@ -179,7 +191,6 @@ export class NetworkScheduler {
     for (const item of this.#pending) {
       if (BigInt(item.dueTick) <= due) {
         out.push({ ...item, outcome: "deliver" });
-        this.#release(item.payloadHash);
       } else {
         rest.push(item);
       }

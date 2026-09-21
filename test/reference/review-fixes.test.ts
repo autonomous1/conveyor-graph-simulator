@@ -81,7 +81,12 @@ describe("review fixes", () => {
     });
     net.send({ id: "m", from: "a", to: "b", channel: "ch", payload: { k: 1 }, sendTick: 1n });
     expect(net.bodies.size).toBe(1);
-    expect(net.tick(1n).map((d) => d.id)).toEqual(["m", "m#2"]);
+    const due = net.tick(1n);
+    expect(due.map((d) => d.id)).toEqual(["m", "m#2"]);
+    expect(net.bodies.size).toBe(1);
+    net.release(due[0]!.payloadHash);
+    expect(net.bodies.size).toBe(1);
+    net.release(due[1]!.payloadHash);
     expect(net.bodies.size).toBe(0);
   });
 
